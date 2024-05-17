@@ -8,7 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-    RUSTFLAGS: -Dwarnings
+  RUSTFLAGS: -Dwarnings
   RUST_BACKTRACE: 1
   # Change to specific Rust release to pin
   rust_min: 1.66.1
@@ -39,16 +39,13 @@ jobs:
 
       - uses: Swatinem/rust-cache@v1
 
-      - name: Build tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --no-run
+      - uses: taiki-e/install-action@cargo-hack
 
+      - name: Build tests
+        run: cargo hack build --feature-powerset --at-least-one-of=async-std,tokio-runtime --mutually-exclusive-features=async-std,tokio-runtime --ignore-private
+        
       - name: Run tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
+        run: cargo hack test --feature-powerset --at-least-one-of=async-std,tokio-runtime --mutually-exclusive-features=async-std,tokio-runtime --ignore-private
 
 
   clippy:
@@ -107,29 +104,11 @@ jobs:
           override: true
 
       - uses: Swatinem/rust-cache@v1
+      - uses: taiki-e/install-action@cargo-hack
+      - uses: taiki-e/install-action@cargo-minimal-versions
 
-      - name: Install cargo-hack
-        run: cargo install cargo-hack
-
-      - name: "check --all-features -Z minimal-versions"
-        run: |
-          # Remove dev-dependencies from Cargo.toml to prevent the next `cargo update`
-          # from determining minimal versions based on dev-dependencies.
-          cargo hack --remove-dev-deps --workspace
-          # Update Cargo.lock to minimal version dependencies.
-          cargo update -Z minimal-versions
-          cargo hack check --all-features --ignore-private
-
-      - name: "check --all-features --unstable -Z minimal-versions"
-        env:
-          RUSTFLAGS: --cfg tokio_unstable -Dwarnings
-        run: |
-          # Remove dev-dependencies from Cargo.toml to prevent the next `cargo update`
-          # from determining minimal versions based on dev-dependencies.
-          cargo hack --remove-dev-deps --workspace
-          # Update Cargo.lock to minimal version dependencies.
-          cargo update -Z minimal-versions
-          cargo hack check --all-features --ignore-private
+      - name: "check --all-features -Z direct-minimal-versions"
+        run: cargo minimal-versions check --direct
 
   fmt:
     runs-on: ubuntu-latest
