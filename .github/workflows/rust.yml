@@ -8,17 +8,26 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+    RUSTFLAGS: -Dwarnings
+  RUST_BACKTRACE: 1
+  # Change to specific Rust release to pin
+  rust_min: 1.66.1
 
 # Copied from the dotenvy crate
 # https://github.com/allan2/dotenvy/blob/master/.github/workflows/ci.yml
 
 jobs:
+
   tests:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         rust: [stable, beta, nightly]
+        os:
+          - windows-latest
+          - ubuntu-latest
+          - macos-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -27,6 +36,8 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
           override: true
+
+      - uses: Swatinem/rust-cache@v1
 
       - name: Build tests
         uses: actions-rs/cargo@v1
@@ -53,6 +64,8 @@ jobs:
           profile: minimal
           components: clippy
 
+      - uses: Swatinem/rust-cache@v1
+
       - name: Run clippy
         uses: actions-rs/cargo@v1
         with:
@@ -71,6 +84,8 @@ jobs:
           override: true
           profile: minimal
 
+      - uses: Swatinem/rust-cache@v1
+
       - name: Run rustdoc
         env:
           RUSTDOCFLAGS: -D warnings
@@ -78,6 +93,43 @@ jobs:
         with:
           command: doc
           args: --no-deps --document-private-items
+
+  minimal-versions:
+    name: minimal-versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install Rust nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+
+      - uses: Swatinem/rust-cache@v1
+
+      - name: Install cargo-hack
+        run: cargo install cargo-hack
+
+      - name: "check --all-features -Z minimal-versions"
+        run: |
+          # Remove dev-dependencies from Cargo.toml to prevent the next `cargo update`
+          # from determining minimal versions based on dev-dependencies.
+          cargo hack --remove-dev-deps --workspace
+          # Update Cargo.lock to minimal version dependencies.
+          cargo update -Z minimal-versions
+          cargo hack check --all-features --ignore-private
+
+      - name: "check --all-features --unstable -Z minimal-versions"
+        env:
+          RUSTFLAGS: --cfg tokio_unstable -Dwarnings
+        run: |
+          # Remove dev-dependencies from Cargo.toml to prevent the next `cargo update`
+          # from determining minimal versions based on dev-dependencies.
+          cargo hack --remove-dev-deps --workspace
+          # Update Cargo.lock to minimal version dependencies.
+          cargo update -Z minimal-versions
+          cargo hack check --all-features --ignore-private
 
   fmt:
     runs-on: ubuntu-latest
@@ -91,6 +143,8 @@ jobs:
           override: true
           profile: minimal
           components: rustfmt
+
+      - uses: Swatinem/rust-cache@v1
 
       - name: Run rustfmt
         uses: actions-rs/cargo@v1
